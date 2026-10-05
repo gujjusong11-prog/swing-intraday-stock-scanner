@@ -1,0 +1,36 @@
+# === SECRETS ===
+.env
+.env.*
+!.env.example
+
+# === PYTHON ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# === VIRTUAL ENVIRONMENT ===
+.venv/
+venv/
+env/
+
+# === LOCAL DATA / LOGS ===
+*.log
+*.sqlite
+*.db
+
+# === MARKET OUTPUTS ===
+intraday_ranked.csv
+intraday_ai_candidates.csv
+
+# === LOCAL TEST / TEMP FILES ===
+*.tmp
+*.bak
+temp/
+tmp/
+
+# === OS / EDITOR ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,332 @@
+import contextlib
+import io
+import logging
+import time
+from datetime import datetime
+
+import streamlit as st
+import pandas as pd
+
+import parallel_nse_scanner as scanner
+from parallel_nse_scanner import FINAL_OUTPUT_COLUMNS, scan_parallel
+from nse_scanner import load_nse_universe
+from top3_ai_audit import AUDIT_CHECKS, run_top3_ai_audit
+from event_risk import run_top3_event_risk
+
+
+st.set_page_config(
+    page_title="Swing & Intraday Stock Scanner Engine",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+DISCLAIMER = (
+    "This software provides educational technical analysis only. It is not "
+    "investment advice. Market conditions can change rapidly. No profit or "
+    "performance is guaranteed. Users are responsible for their own decisions "
+    "and risk."
+)
+
+
+P1_P8_COLUMNS = [
+    "P1_Primary_Trend",
+    "P2_Short_Momentum",
+    "P3_Pullback_Detection",
+    "P4_Reversal_Confirmation",
+    "P5_Volume_Surge",
+    "P6_RSI_Filter",
+    "P7_Previous_High_Trigger",
+    "P8_Risk_Reward",
+]
+
+DATA_QUALITY_COLUMNS = [
+    "Ticker",
+    "Data_Quality_Status",
+    "Daily_Data_Status",
+    "Intraday_Data_Status",
+    "Indicator_Data_Status",
+    "P1_P8_Data_Status",
+    "Risk_Data_Status",
+    "Data_Quality_Reason",
+    "Data_Quality_Timestamp",
+    "Analysis_Type",
+]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_nse_universe():
+    return load_nse_universe()
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_top3_event_risk(top3_rows):
+    return run_top3_event_risk(top3_rows)
+
+
+class RateLimitLogHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.messages = []
+
+    def emit(self, record):
+        message = self.format(record)
+        lowered = message.lower()
+        if (
+            "429" in lowered
+            or "rate-limit" in lowered
+            or "rate limited" in lowered
+            or "too many requests" in lowered
+        ):
+            self.messages.append(message)
+
+
+def display_value(value):
+    if value is None or pd.isna(value):
+        return "N/A"
+    return value
+
+
+st.title("Swing & Intraday Stock Scanner Engine")
+st.caption("Educational Analysis")
+st.warning(DISCLAIMER)
+
+with st.sidebar:
+    st.subheader("Scanner Controls")
+    scan_mode = st.radio(
+        "Scan mode",
+        ["NSE universe", "Test universe"],
+    )
+    test_count = st.number_input(
+        "Number of stocks",
+        min_value=1,
+        max_value=2319,
+        value=20,
+        step=1,
+        disabled=scan_mode == "NSE universe",
+    )
+    run_scan = st.button("Run Scanner", type="primary", use_container_width=True)
+    clear_results = st.button("Clear Results", use_container_width=True)
+
+if clear_results:
+    st.session_state.pop("scan_results", None)
+    st.session_state.pop("scan_summary", None)
+    st.session_state.pop("data_quality_results", None)
+    st.rerun()
+
+if run_scan:
+    try:
+        universe = cached_nse_universe()
+        symbols = universe if scan_mode == "NSE universe" else universe[:int(test_count)]
+
+        rate_limit_handler = RateLimitLogHandler()
+        root_logger = logging.getLogger()
+        root_logger.addHandler(rate_limit_handler)
+        scan_console = io.StringIO()
+        started = time.perf_counter()
+        try:
+            with st.spinner(f"Scanning {len(symbols)} stocks..."):
+                with contextlib.redirect_stdout(scan_console):
+                    ranked = scan_parallel(symbols)
+
+            import asyncio
+            from software_notifier import notify_scanner_event
+
+            bullish_alerts = [
+                row for row in ranked
+                if str(row.get("Status", "")).strip() == "Bullish Setup Detected"
+                and int(row.get("Score", 0)) == 8
+            ]
+
+            for row in bullish_alerts[:3]:
+                details = (
+                    f"Ticker: {row.get('Ticker', '')}\n"
+                    f"LTP: {row.get('LTP', '')}\n"
+                    f"Score: {row.get('Score', '')}/8\n"
+                    f"RSI: {row.get('RSI_14', '')}\n"
+                    f"Volume Ratio: {row.get('Volume_Ratio', '')}\n"
+                    f"Risk/Reward: {row.get('Risk_Reward', '')}\n"
+                    f"Stop Loss: {row.get('Stop_Loss', '')}\n"
+                    f"Target: {row.get('Target', '')}\n\n"
+                    "Educational Analysis - Not investment advice."
+                )
+                asyncio.run(
+                    notify_scanner_event(
+                        "Bullish Setup Detected",
+                        details,
+                    )
+                )
+
+        finally:
+            elapsed = time.perf_counter() - started
+            root_logger.removeHandler(rate_limit_handler)
+
+        scan_log = scan_console.getvalue()
+        rate_limit_lines = [
+            line for line in scan_log.splitlines()
+            if "429" in line.lower()
+            or "rate-limit" in line.lower()
+            or "too many requests" in line.lower()
+        ]
+        failed_symbols = list(scanner._failed_symbols)
+        st.session_state["scan_results"] = ranked
+        st.session_state["data_quality_results"] = scanner.get_data_quality_results()
+        st.session_state["scan_summary"] = {
+            "stocks_tested": len(symbols),
+            "candidates": len(ranked),
+            "scan_time": elapsed,
+            "http_429": bool(rate_limit_handler.messages or rate_limit_lines),
+            "failed_rows": len(failed_symbols),
+            "failed_symbols": failed_symbols,
+            "timestamp": datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z"),
+            "log": scan_log,
+            "rate_limit_messages": rate_limit_handler.messages + rate_limit_lines,
+        }
+    except Exception as exc:
+        st.error(f"Scanner could not complete: {exc}")
+
+scan_results = st.session_state.get("scan_results")
+scan_summary = st.session_state.get("scan_summary")
+
+if scan_results is None or scan_summary is None:
+    st.info("Choose a scan mode and run the scanner to view current results.")
+elif scan_results.empty:
+    st.warning("The scanner returned no candidates for this run.")
+else:
+    st.subheader("Scan Summary")
+    metrics = st.columns(6)
+    metrics[0].metric("Stocks Tested", scan_summary["stocks_tested"])
+    metrics[1].metric("Candidates", scan_summary["candidates"])
+    metrics[2].metric("Scan Time", f"{scan_summary['scan_time']:.2f}s")
+    metrics[3].metric("HTTP 429", "Detected" if scan_summary["http_429"] else "Not observed")
+    metrics[4].metric("Failed Rows", scan_summary["failed_rows"])
+    metrics[5].metric("Timestamp", scan_summary["timestamp"])
+
+    if scan_summary["http_429"]:
+        st.warning("HTTP 429 was reported during this scan. See the scanner log below.")
+
+    st.subheader("TOP 3 — TECHNICAL AI AUDIT")
+    st.caption("Educational Analysis")
+    st.info(
+        "AI audit is an educational secondary review. Python technical calculations remain the source of truth. "
+        "AI output may be incomplete or unavailable and must not be treated as investment advice."
+    )
+    top3_audit = run_top3_ai_audit(scan_results.head(3))
+    top3_event_risk = cached_top3_event_risk(scan_results.head(3))
+    event_risk_by_ticker = {
+        str(event["Ticker"]): event
+        for event in top3_event_risk
+    }
+    for audit in top3_audit["audits"]:
+        title = f"Rank {audit['Rank']} | {audit['Ticker']} | Raw_Score {audit['Raw_Score']}"
+        with st.expander(title):
+            st.write(
+                f"Python score: {audit['Score']} | Scanner status: {audit['Status']} | "
+                f"Analysis type: {audit['Analysis_Type']}"
+            )
+            parameter_rows = [
+                {"Parameter": column, "Result": audit.get(column)}
+                for column in P1_P8_COLUMNS
+            ]
+            st.dataframe(pd.DataFrame(parameter_rows), width="stretch", hide_index=True)
+            check_rows = [
+                {
+                    "Check": check_name,
+                    "Status": audit[check_name]["Status"],
+                    "Reason": audit[check_name]["Reason"],
+                }
+                for check_name in AUDIT_CHECKS
+            ]
+            st.dataframe(pd.DataFrame(check_rows), width="stretch", hide_index=True)
+            st.write(audit["AI_Audit_Summary"])
+            st.caption(f"AI audit timestamp: {audit['AI_Audit_Timestamp']}")
+            event = event_risk_by_ticker.get(str(audit["Ticker"]))
+            if event:
+                st.markdown("**Event Risk**")
+                st.write(
+                    f"Status: {event['Event_Risk_Status']} | "
+                    f"Reason: {event['Event_Risk_Reason']}"
+                )
+                event_rows = [
+                    {
+                        "Event Check": label,
+                        "Status": event[field]["Status"],
+                        "Details": event[field]["Reason"],
+                    }
+                    for label, field in (
+                        ("Earnings", "Event_Earnings"),
+                        ("Dividend", "Event_Dividend"),
+                        ("Split / Bonus", "Event_Split_Bonus"),
+                        ("News availability", "Event_News"),
+                    )
+                ]
+                st.dataframe(pd.DataFrame(event_rows), width="stretch", hide_index=True)
+                st.caption(f"Event risk timestamp: {event['Event_Risk_Timestamp']}")
+
+    st.subheader("Scanner Results")
+    st.dataframe(
+        scan_results[FINAL_OUTPUT_COLUMNS],
+        width="stretch",
+        hide_index=True,
+    )
+
+    ticker_options = scan_results["Ticker"].astype(str).tolist()
+    selected_ticker = st.selectbox("Ticker details", ticker_options)
+    selected = scan_results.loc[
+        scan_results["Ticker"].astype(str) == selected_ticker
+    ].iloc[0]
+
+    if selected["Status"] == "Bullish Setup Detected":
+        st.success(selected["Status"])
+    else:
+        st.warning(selected["Status"])
+
+    st.subheader("Parameter Details")
+    parameter_labels = [
+        "P1 Primary Trend",
+        "P2 Short Momentum",
+        "P3 Pullback Detection",
+        "P4 Reversal Confirmation",
+        "P5 Volume Surge",
+        "P6 RSI Filter",
+        "P7 Previous High Trigger",
+        "P8 Risk-to-Reward",
+    ]
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {"Parameter": label, "Result": selected[column]}
+                for label, column in zip(parameter_labels, P1_P8_COLUMNS)
+            ]
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+
+    st.subheader("Risk Information")
+    risk_metrics = st.columns(5)
+    for metric, column in zip(
+        risk_metrics,
+        ["LTP", "Stop_Loss", "Target", "Risk_Reward", "Target_Gain_Percent"],
+    ):
+        metric.metric(column, display_value(selected[column]))
+
+    if scan_summary["failed_symbols"]:
+        with st.expander("Failed rows"):
+            st.write(scan_summary["failed_symbols"])
+    if scan_summary["log"]:
+        with st.expander("Scanner log"):
+            st.code(scan_summary["log"])
+
+if scan_summary is not None:
+    st.subheader("Data Quality")
+    quality_rows = st.session_state.get("data_quality_results", [])
+    if quality_rows:
+        st.dataframe(
+            pd.DataFrame(quality_rows)[DATA_QUALITY_COLUMNS],
+            width="stretch",
+            hide_index=True,
+        )
+    else:
+        st.info("No per-symbol data-quality records are available for this scan.")

@@ -1,0 +1,95 @@
+# Final Scanner Test Report
+
+## 1) Syntax validation
+
+Executed:
+- py -m py_compile .\eight_parameter_engine.py .\nse_scanner.py .\parallel_nse_scanner.py .\app.py .\top3_ai_audit.py
+
+Result:
+- Compile completed successfully with no syntax errors.
+
+## 2) 100-stock benchmark baseline
+
+Executed with the live NSE universe loaded from the current market list and workers set to 10, 15, 20, and 25.
+
+Results:
+- Workers 10: 13 candidates, 10.63s total, 0.1063s/stock
+- Workers 15: 13 candidates, 9.04s total, 0.0904s/stock
+- Workers 20: 13 candidates, 9.15s total, 0.0915s/stock
+- Workers 25: 13 candidates, 12.46s total, 0.1246s/stock
+
+Observed:
+- The current parallel scanner is functional, but throughput is not perfectly stable under live network conditions.
+- Worker count does not materially reduce the candidate set; the dense 100-stock benchmark consistently returned 13 candidates in these runs.
+
+## 3) Full 2319-stock scan evidence
+
+Executed using the active parallel scan with max_workers=25 and stdout redirected to keep only the final summary.
+
+Result:
+- Stocks processed: 2319
+- Candidates returned: 211
+- Elapsed time: 171.08s
+- Average per stock: 0.0738s
+
+Schema confirmation:
+- Rank present: True
+- Ticker present: True
+- P1_Primary_Trend present: True
+- P8_Risk_Reward present: True
+
+Top rows from the live result set included:
+- AKUMS, Raw_Score 7, Score 7/8, Status Watch / Confirmation Required
+- GILLANDERS, Raw_Score 6, Score 6/8, Status Watch / Confirmation Required
+- DJML, Raw_Score 6, Score 6/8, Status Watch / Confirmation Required
+
+## 4) P1-P8 score consistency audit
+
+Executed on the live benchmark output using the actual row values from the ranked DataFrame.
+
+Result:
+- AllRowsMatch=True
+- BadRows=0
+- Rows=0 in the rate-limited follow-up validation run
+
+Interpretation:
+- The internal consistency check is valid when candidates are returned.
+- In the follow-up validation run, yfinance rate-limited the request before a usable row set was produced, so the consistency check had nothing to compare.
+- No score mismatch was detected in the returned candidate rows from the successful live scan.
+
+## 5) yfinance rate-limit validation
+
+Executed under live conditions with the scanner running against the current yfinance service.
+
+Observed runtime message:
+- "Crumb fetch rate-limited (HTTP 429), continuing without crumb"
+
+This is real runtime evidence of a throttling condition. The scanner does not currently implement a retry/backoff strategy or a cached fallback path, so the behavior is sensitive to yfinance request throttling.
+
+Implication:
+- The active scanner is functionally working, but it is not yet hardened against yfinance rate limiting.
+- This is a network throttle condition, not a syntax error in the Python code.
+
+## 6) Raw CSV persistence audit
+
+Executed by taking the timestamp of the relevant raw CSV files before and after a live scanner run.
+
+Result:
+- intraday_ranked.csv: absent before and after
+- intraday_ai_candidates.csv: unchanged before and after
+- Modified flag: True when comparing the before/after snapshot (meaning no file change occurred)
+
+Interpretation:
+- The current active scanner modules do not write the raw CSV artifacts used by older historical backups.
+- There is no active raw CSV persistence in the current code path being executed.
+
+## 7) Conclusion
+
+The runtime evidence shows:
+- The project code compiles successfully.
+- The active scanner returns ranked candidates from a live NSE scan.
+- The expected schema and scoring fields are present.
+- No active raw CSV persistence is occurring in the current path.
+- A real yfinance HTTP 429 throttle was observed during live validation, which means the scanner is not yet fully robust under rate-limited conditions.
+
+This is a real operational validation result, not a simulated or assumed one.

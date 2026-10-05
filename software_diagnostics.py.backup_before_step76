@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+from dataclasses import dataclass
+
+
+@dataclass
+class RuntimeErrorRecord:
+    file_name: str
+    function_name: str
+    error_type: str
+    error_message: str
+    traceback_text: str = ""
+    context: str = ""
+
+
+
+
+def build_runtime_error_report(
+    *,
+    file_name: str,
+    function_name: str,
+    error_message: str,
+    traceback_text: str = "",
+    context: str = "",
+) -> str:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    return (
+        "🚨 SOFTWARE ERROR & ACTION REPORT\n"
+        f"Time: {timestamp}\n"
+        f"File: {file_name}\n"
+        f"Function: {function_name}\n"
+        f"Problem: {error_message}\n\n"
+        "Traceback:\n"
+        f"{traceback_text or 'Not available'}\n\n"
+        "Context:\n"
+        f"{context or 'Not available'}\n"
+    )
+
+
+def diagnose_runtime_error(
+    *,
+    file_name: str,
+    function_name: str,
+    error_message: str,
+    traceback_text: str = "",
+    context: str = "",
+) -> dict[str, Any]:
+    report = build_runtime_error_report(
+        file_name=file_name,
+        function_name=function_name,
+        error_message=error_message,
+        traceback_text=traceback_text,
+        context=context,
+    )
+
+    return {
+        "status": "READY",
+        "report": report,
+        "gemini_diagnosis": "",
+        "chatgpt_ready_prompt": "",
+    }
+
+
+async def send_runtime_error_report(message: str) -> bool:
+    from software_notifier import send_telegram_message
+
+    return await send_telegram_message(message)

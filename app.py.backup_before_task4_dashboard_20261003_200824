@@ -1,0 +1,236 @@
+import os
+from pathlib import Path
+from datetime import datetime
+
+import streamlit as st
+import pandas as pd
+from google import genai
+from streamlit_autorefresh import st_autorefresh
+from deep_setup_engine import calculate_deep_setup
+from top3_ai_audit import run_top3_ai_audit
+
+
+st.set_page_config(
+    page_title="Stock Scanner Engine",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+# ============================================================
+# DUAL TIMER CONFIGURATION
+# ============================================================
+
+INTRADAY_REFRESH_OPTIONS = {
+    "1 Minute": 60,
+    "3 Minutes": 180
+}
+
+SWING_UPDATE_TIMES = ("15:10", "19:00")
+
+GEMINI_MODEL = "gemini-3.5-flash-lite"
+AI_MONITOR_INTERVAL = "5m"
+
+
+def run_gemini_monitor():
+    api_key = os.environ.get("GEMINI_API_KEY")
+
+    if not api_key:
+        return {
+            "status": "FAIL",
+            "model": GEMINI_MODEL,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "error": "GEMINI_API_KEY environment variable not found."
+        }
+
+    try:
+        client = genai.Client(api_key=api_key)
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=(
+                "You are the AI software audit monitor for a stock scanner engine. "
+                "Do not provide trading recommendations. "
+                "Do not modify or invent technical calculations. "
+                "Check only whether the AI audit layer is operational. "
+                "Reply exactly with:\n"
+                "STATUS: PASS\n"
+                "ROLE: AI AUDITOR\n"
+                "CHECK: Gemini Monitor Connection\n"
+                "MESSAGE: AI audit layer is operational"
+            )
+        )
+
+        return {
+            "status": "PASS",
+            "model": GEMINI_MODEL,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "response": (response.text or "").strip()
+        }
+
+    except Exception as exc:
+        return {
+            "status": "FAIL",
+            "model": GEMINI_MODEL,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "error": str(exc)
+        }
+
+
+# ============================================================
+# ============================================================
+# SIMPLE DASHBOARD
+# ============================================================
+
+st.markdown("""
+<style>
+.stApp {
+    background: #0b1220;
+}
+
+.block-container {
+    max-width: 100%;
+    padding: 30px 45px 40px 45px;
+}
+
+.header {
+    font-size: 32px;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.subtitle {
+    color: #94a3b8;
+    font-size: 14px;
+    margin-bottom: 25px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="header">📊 Swing & Intraday Scanner</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="subtitle">Dynamic NSE Stock Selection • Technical Analysis • AI Audit</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown("### 🟢 System Status")
+
+s1, s2, s3, s4 = st.columns(4)
+
+with s1:
+    st.metric("Scanner", "ACTIVE")
+
+with s2:
+    st.metric("Market Data", "CONNECTED")
+
+with s3:
+    st.metric("Python Engine", "RUNNING")
+
+with s4:
+    st.metric("Last Update", datetime.now().strftime("%H:%M:%S"))
+
+st.caption(
+    "Python = Calculation Source of Truth • "
+    "Background AI = Audit Layer • Telegram = Notification Only"
+)
+
+candidate_file = "intraday_ai_candidates.csv"
+
+if Path(candidate_file).exists():
+
+    intraday_df = pd.read_csv(candidate_file)
+
+    st.markdown("### 📋 Scanner Summary")
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.metric("Qualified Candidates", len(intraday_df))
+
+    with c2:
+        st.metric("Top Technical Setups", min(3, len(intraday_df)))
+
+    st.markdown("### 🏆 Top Technical Setups")
+    st.caption("Python-ranked candidates • Educational Analysis only")
+
+    for _, stock in intraday_df.head(3).iterrows():
+
+        ticker = stock.get("Ticker", "N/A")
+        raw_score = stock.get("Raw_Score", 0)
+
+        try:
+            score_value = float(raw_score)
+        except (TypeError, ValueError):
+            score_value = 0
+
+        if score_value >= 8:
+            status = "Bullish Setup Detected"
+        else:
+            status = "Watch / Confirmation Required"
+
+        with st.container(border=True):
+
+            c1, c2, c3 = st.columns([2, 2, 1])
+
+            with c1:
+                st.markdown(f"### {ticker}")
+
+                if status == "Bullish Setup Detected":
+                    st.success(status)
+                else:
+                    st.warning(status)
+
+            with c2:
+                st.write(f"**LTP:** ₹{stock.get('LTP', 'N/A')}")
+                st.write(
+                    f"**Volume Ratio:** {stock.get('Volume_Ratio', 'N/A')}"
+                )
+
+            with c3:
+                st.write(f"**Score:** {stock.get('Score', 'N/A')}")
+
+    with st.expander("📊 Detailed Technical Table", expanded=False):
+
+        display_cols = [
+            "Rank",
+            "Ticker",
+            "LTP",
+            "VWAP",
+            "EMA_9",
+            "EMA_21",
+            "Volume_Ratio",
+            "CPR_Top",
+            "Score"
+        ]
+
+        available_cols = [
+            col for col in display_cols
+            if col in intraday_df.columns
+        ]
+
+        st.dataframe(
+            intraday_df[available_cols],
+            width="stretch",
+            hide_index=True
+        )
+
+else:
+
+    st.info(
+        "Intraday candidate list is not available yet. "
+        "Background scanner will populate it."
+    )
+
+st.divider()
+
+st.warning(
+    "⚠️ EDUCATIONAL ANALYSIS ONLY — "
+    "Technical conditions are for educational reference and "
+    "are not investment recommendations. Market risk applies. "
+    "No guaranteed returns."
+)

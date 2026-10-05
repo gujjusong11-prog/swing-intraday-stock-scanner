@@ -1,0 +1,165 @@
+{
+  "project": {
+    "name": "Swing & Intraday Stock Scanner Engine",
+    "version": "1.0",
+    "architecture": "Python + Streamlit + yfinance + Gemini QA + Telegram",
+    "development_mode": "One Task At A Time",
+    "human_approval_required": true
+  },
+  "ai_managers": {
+    "chatgpt": {
+      "role": "Lead Developer / Architect / Dev-Fix Manager"
+    },
+    "gemini": {
+      "role": "Independent QA / Security Auditor / Technical Auditor",
+      "model": "gemini-3.5-flash-lite"
+    },
+    "python": {
+      "role": "Deterministic Calculation Source of Truth"
+    }
+  },
+  "locked_rules": {
+    "eight_parameter_engine": true,
+    "p8_minimum_rr": "1:2",
+    "sebi_guardrails": true,
+    "no_automatic_production_overwrite": true
+  },
+  "modules": [
+    {
+      "id": "001",
+      "name": "Dynamic NSE Universe",
+      "status": "Completed"
+    },
+    {
+      "id": "002",
+      "name": "8-Parameter Engine",
+      "status": "Completed - Locked"
+    },
+    {
+      "id": "003",
+      "name": "Risk-to-Reward Engine",
+      "status": "Completed - Locked"
+    },
+    {
+      "id": "004",
+      "name": "Full NSE Scanner",
+      "status": "Completed"
+    },
+    {
+      "id": "005",
+      "name": "Statistical Validation",
+      "status": "Pending"
+    },
+    {
+      "id": "006",
+      "name": "Trap Zone Detector",
+      "status": "Pending"
+    },
+    {
+      "id": "007",
+      "name": "ATR / Chandelier Trailing Risk Engine",
+      "status": "Pending"
+    },
+    {
+      "id": "008",
+      "name": "Top-3 Deep Technical Audit",
+      "status": "Completed"
+    },
+    {
+      "id": "009",
+      "name": "Gemini QA Engine",
+      "status": "Completed"
+    },
+    {
+      "id": "010",
+      "name": "ChatGPT Dev-Fix Workflow",
+      "status": "In Progress"
+    },
+    {
+      "id": "011",
+      "name": "AI Dev Hub",
+      "status": "Pending"
+    },
+    {
+      "id": "012",
+      "name": "Telegram Bot-1 Security Foundation",
+      "status": "Next"
+    },
+    {
+      "id": "013",
+      "name": "Telegram Bot-1 Authentication",
+      "status": "Pending"
+    },
+    {
+      "id": "014",
+      "name": "Telegram Bot-1 Status Command",
+      "status": "Pending"
+    },
+    {
+      "id": "015",
+      "name": "Telegram Bot-1 Gemini Status",
+      "status": "Pending"
+    },
+    {
+      "id": "016",
+      "name": "Telegram Bot-1 Scanner Commands",
+      "status": "Pending"
+    },
+    {
+      "id": "017",
+      "name": "Controlled Software Update Workflow",
+      "status": "Pending"
+    },
+    {
+      "id": "018",
+      "name": "Telegram Bot-2 Technical Alerts",
+      "status": "Pending"
+    },
+    {
+      "id": "019",
+      "name": "Trade Tracking",
+      "status": "Pending"
+    },
+    {
+      "id": "020",
+      "name": "Daily Capital Kill-Switch",
+      "status": "Pending"
+    },
+    {
+      "id": "021",
+      "name": "Multi-Timeframe Alignment",
+      "status": "Pending"
+    },
+    {
+      "id": "022",
+      "name": "F&O OI / PCR Context Layer",
+      "status": "Pending"
+    },
+    {
+      "id": "023",
+      "name": "Limit / Slicing Execution Research",
+      "status": "Pending - Paper Only"
+    },
+    {
+      "id": "024",
+      "name": "ATR / Chandelier Profit Protection",
+      "status": "Pending"
+    },
+    {
+      "id": "025",
+      "name": "Full Security Audit",
+      "status": "Pending"
+    },
+    {
+      "id": "026",
+      "name": "Full Regression Test",
+      "status": "Pending"
+    }
+  ],
+  "current_task": {
+    "task_id": "TASK-012",
+    "name": "Telegram Bot-1 Security Foundation",
+    "status": "READY_TO_START",
+    "production_code_change": false
+  }
+}
