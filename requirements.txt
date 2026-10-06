@@ -1,0 +1,7 @@
+pandas
+yfinance
+streamlit
+streamlit-autorefresh
+python-dotenv
+python-telegram-bot
+google-genai
