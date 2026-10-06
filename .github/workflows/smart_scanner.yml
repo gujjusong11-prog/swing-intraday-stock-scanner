@@ -13,8 +13,8 @@ jobs:
     timeout-minutes: 15
 
     env:
-      TELEGRAM_BOT2_TOKEN: ${{ secrets.TELEGRAM_BOT2_TOKEN }}
-      TELEGRAM_SCANNER_CHAT_ID: ${{ secrets.TELEGRAM_SCANNER_CHAT_ID }}
+      TELEGRAM_BOT1_TOKEN: ${{ secrets.TELEGRAM_BOT1_TOKEN }}
+      TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
