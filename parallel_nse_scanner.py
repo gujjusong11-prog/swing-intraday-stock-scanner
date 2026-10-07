@@ -6,6 +6,9 @@ from software_diagnostics import RuntimeErrorRecord, diagnose_runtime_error
 import time
 import yfinance as yf
 import pandas as pd
+import asyncio
+
+from software_notifier import notify_scanner_event
 
 from eight_parameter_engine import calculate_eight_parameter_setup, _rsi
 from nse_scanner import load_nse_universe, rank_results, is_candidate_pre_filter
@@ -252,7 +255,7 @@ def build_capital_safe_watchlist(symbols, batch_size=500):
     print("CAPITAL-SAFE PRE-FILTER")
     print("=" * 70)
     print(f"Universe          : {len(symbols)}")
-    print(f"Price Range       : ₹{MIN_CAPITAL_PRICE:.0f}-₹{MAX_CAPITAL_PRICE:.0f}")
+    print(f"Price Range       : Rs.{MIN_CAPITAL_PRICE:.0f}-Rs.{MAX_CAPITAL_PRICE:.0f}")
     print(f"Min Avg Volume    : {MIN_AVG_DAILY_VOLUME:,}")
     print(f"P1-P8 Watchlist   : {len(watchlist)}")
     print("=" * 70)
@@ -381,15 +384,37 @@ def prepare_final_output(ranked):
 if __name__ == "__main__":
     universe = load_nse_universe()
 
-    test_symbols = universe[:20]
-
-    ranked = scan_parallel(test_symbols)
+    ranked = scan_parallel(universe)
 
     if ranked.empty:
         print("No candidates found.")
     else:
         print()
         print(ranked[FINAL_OUTPUT_COLUMNS].to_string(index=False))
+
+        bullish = ranked[
+            ranked["Status"].eq("Bullish Setup Detected")
+        ]
+
+        if not bullish.empty:
+            top = bullish.head(3)
+
+            details = top[[
+                "Ticker",
+                "LTP",
+                "Score",
+                "Risk_Reward",
+                "Stop_Loss",
+                "Target",
+                "Target_Gain_Percent",
+            ]].to_string(index=False)
+
+            asyncio.run(
+                notify_scanner_event(
+                    "Bullish Setup Detected",
+                    details,
+                )
+            )
 
 
 
