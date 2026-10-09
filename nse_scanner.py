@@ -16,8 +16,12 @@ def load_nse_universe():
 
     response = requests.get(
         NSE_EQUITY_URL,
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=15,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "text/csv,application/octet-stream,*/*",
+            "Referer": "https://www.nseindia.com/",
+        },
+        timeout=30,
     )
     response.raise_for_status()
 

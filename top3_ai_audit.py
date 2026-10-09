@@ -1,5 +1,14 @@
 from datetime import datetime
+import json
 import math
+import os
+
+from dotenv import load_dotenv
+from google import genai
+
+
+load_dotenv()
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 
 AUDIT_CHECKS = [
@@ -193,9 +202,42 @@ def run_top3_ai_audit(stock_data):
 
   timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
   audits = [_audit_stock(row, timestamp) for row in rows[:3]]
+  api_key = os.getenv("GEMINI_API_KEY", "").strip()
+  if not api_key or not rows:
+    return {
+      "status": "AI audit unavailable",
+      "message": "Gemini configuration or Top-3 scanner data is unavailable; deterministic checks use supplied Python scanner data only.",
+      "audits": audits,
+    }
+
+  prompt = (
+    "Provide a concise Educational Analysis audit of these scanner rows. "
+    "Use only the supplied data; do not invent or estimate missing market values. "
+    "Do not rerank candidates or alter Python P1-P8 scores. Clearly flag missing data, "
+    "uncertainty, and material risks. Never give a buy/sell instruction or imply guaranteed returns. "
+    "Include the exact phrases Educational Analysis and Risk Warning.\n\n"
+    + json.dumps(rows[:3], default=str, ensure_ascii=True)
+  )
+  try:
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+      model=GEMINI_MODEL,
+      contents=prompt,
+    )
+    analysis = (response.text or "").strip()
+    if not analysis:
+      raise ValueError("Gemini returned an empty Top-3 analysis.")
+  except Exception as exc:
+    return {
+      "status": "AI audit unavailable",
+      "message": f"Gemini Top-3 analysis failed ({type(exc).__name__}); deterministic checks remain available.",
+      "audits": audits,
+    }
+
   return {
-    "status": "AI audit unavailable",
-    "message": "No external AI service is configured; checks use supplied Python scanner data only.",
+    "status": "AI audit available",
+    "message": "Gemini reviewed supplied Top-3 data for educational risk context; Python P1-P8 results remain authoritative.",
+    "gemini_analysis": analysis,
     "audits": audits,
   }
 

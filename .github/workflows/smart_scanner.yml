@@ -15,6 +15,10 @@ jobs:
     env:
       TELEGRAM_BOT1_TOKEN: ${{ secrets.TELEGRAM_BOT1_TOKEN }}
       TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+      TELEGRAM_BOT2_TOKEN: ${{ secrets.TELEGRAM_BOT2_TOKEN }}
+      TELEGRAM_SCANNER_CHAT_ID: ${{ secrets.TELEGRAM_SCANNER_CHAT_ID }}
+      REALIZED_DAILY_LOSS: ${{ secrets.REALIZED_DAILY_LOSS }}
+      REALIZED_DAILY_LOSS_AS_OF: ${{ secrets.REALIZED_DAILY_LOSS_AS_OF }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
@@ -31,6 +35,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Run scanner regressions
+        run: |
+          python -m unittest -v test_smart_pre_filter test_capital_risk_engine test_trade_ledger test_backtesting_engine test_scanner_go_live
+
+      - name: Verify current daily-loss input
+        run: |
+          python -c "import os; from datetime import datetime; from zoneinfo import ZoneInfo; loss = float(os.environ['REALIZED_DAILY_LOSS']); as_of = os.environ['REALIZED_DAILY_LOSS_AS_OF']; today = datetime.now(ZoneInfo('Asia/Kolkata')).date().isoformat(); assert loss >= 0 and as_of == today, 'Current verified daily-loss input required'; print('DAILY_LOSS_GATE=VERIFIED')"
+
+      - name: Send Telegram Bot-2 test message
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python -c "import asyncio; from software_notifier import send_scanner_message; sent = asyncio.run(send_scanner_message('Scanner Bot-2 test message. Educational Analysis. Risk Warning.')); print('TELEGRAM_TEST=' + ('SENT' if sent else 'DATA UNAVAILABLE')); raise SystemExit(0 if sent else 1)"
 
       - name: Run NSE Scanner
         run: |

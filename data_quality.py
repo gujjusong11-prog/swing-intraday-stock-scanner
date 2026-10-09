@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import math
 import numbers
 import re
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -20,6 +21,8 @@ P1_P8_FIELDS = (
 DAILY_MINIMUM_ROWS = 220
 INTRADAY_MINIMUM_ROWS = 100
 MAX_MISSING_ROW_FRACTION = 0.05
+MAX_INTRADAY_DATA_AGE = timedelta(hours=24)
+MARKET_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 
 def _number(value):
@@ -229,7 +232,7 @@ def _risk_quality(engine_result):
     return "PASS", "Stop_Loss, Target, Risk_Reward, and target gain are internally consistent."
 
 
-def validate_data_quality(ticker, daily_data, intraday_data, engine_result=None):
+def validate_data_quality(ticker, daily_data, intraday_data, engine_result=None, now=None):
     daily_status, daily_reason, daily_rows = _frame_quality(
         daily_data,
         "Daily",
@@ -247,6 +250,26 @@ def validate_data_quality(ticker, daily_data, intraday_data, engine_result=None)
         and not intraday_data.index.hasnans
         and set(REQUIRED_COLUMNS).issubset(intraday_data.columns)
     ):
+        latest_timestamp = intraday_data.index[-1]
+        if latest_timestamp.tzinfo is None:
+            latest_timestamp = latest_timestamp.tz_localize(MARKET_TIMEZONE)
+        else:
+            latest_timestamp = latest_timestamp.tz_convert(MARKET_TIMEZONE)
+        current_time = now or datetime.now(MARKET_TIMEZONE)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=MARKET_TIMEZONE)
+        else:
+            current_time = current_time.astimezone(MARKET_TIMEZONE)
+        data_age = current_time - latest_timestamp
+        if data_age < timedelta(0):
+            intraday_status = "FAIL"
+            intraday_reason = f"{intraday_reason} Latest 5-minute timestamp is in the future."
+        elif data_age > MAX_INTRADAY_DATA_AGE:
+            intraday_status = "FAIL"
+            intraday_reason = (
+                f"{intraday_reason} Latest 5-minute data is older than "
+                f"{MAX_INTRADAY_DATA_AGE.total_seconds() / 3600:.0f} hours; data is stale."
+            )
         latest_date = intraday_data.index[-1].date()
         latest_day = intraday_data.loc[intraday_data.index.date == latest_date, REQUIRED_COLUMNS]
         latest_day = latest_day.apply(pd.to_numeric, errors="coerce")

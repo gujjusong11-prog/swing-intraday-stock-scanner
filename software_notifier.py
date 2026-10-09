@@ -7,6 +7,8 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT1_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").strip()
+BOT2_TOKEN = os.getenv("TELEGRAM_BOT2_TOKEN", "").strip()
+SCANNER_CHAT_ID = os.getenv("TELEGRAM_SCANNER_CHAT_ID", "").strip()
 
 
 def telegram_configured() -> bool:
@@ -28,6 +30,30 @@ async def send_telegram_message(message: str) -> bool:
 
         return True
 
+    except Exception:
+        return False
+
+
+def scanner_telegram_configured() -> bool:
+    return bool(
+        BOT2_TOKEN
+        and SCANNER_CHAT_ID
+        and SCANNER_CHAT_ID.lstrip("-").isdigit()
+    )
+
+
+async def send_scanner_message(message: str) -> bool:
+    if not scanner_telegram_configured():
+        return False
+
+    try:
+        bot = Bot(token=BOT2_TOKEN)
+        async with bot:
+            await bot.send_message(
+                chat_id=int(SCANNER_CHAT_ID),
+                text=message,
+            )
+        return True
     except Exception:
         return False
 
